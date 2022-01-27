@@ -211,13 +211,27 @@ function parse(content) {
     }
 }
 exports.parse = parse;
-function getConfig(client, configPath) {
+function getConfig(client, configPath, remoteConfigPath) {
     return __awaiter(this, void 0, void 0, function* () {
+        let owner = '';
+        let repo = '';
+        let path = '';
+        if (configPath) {
+            owner = github.context.repo.owner;
+            repo = github.context.repo.repo;
+            // ref = github.context.sha
+            path = configPath;
+        }
+        else if (remoteConfigPath) {
+            const remoteInfo = remoteConfigPath.split('/');
+            owner = remoteInfo[0];
+            repo = remoteInfo[1];
+            path = remoteInfo.slice(2).join('/');
+        }
         const response = yield client.repos.getContent({
-            owner: github.context.repo.owner,
-            repo: github.context.repo.repo,
-            ref: github.context.sha,
-            path: configPath
+            owner,
+            repo,
+            path
         });
         const content = yield Buffer.from(response.data.content, response.data.encoding).toString();
         return parse(content);
@@ -361,7 +375,17 @@ const labeler_1 = __nccwpck_require__(5272);
 const config_1 = __nccwpck_require__(88);
 const checks_1 = __nccwpck_require__(2321);
 const githubToken = core.getInput('github-token');
-const configPath = core.getInput('config-path', { required: true });
+let configPath = core.getInput('config-path');
+let remoteConfigPath = core.getInput('remote-config-path');
+if (configPath === '' && remoteConfigPath === '') {
+    throw new Error('Valid config-path or remote-config-path are required');
+}
+else if (remoteConfigPath !== '') {
+    configPath = undefined;
+}
+else {
+    remoteConfigPath = undefined;
+}
 const client = github.getOctokit(githubToken);
 const payload = github.context.payload.pull_request || github.context.payload.issue;
 if (!(payload === null || payload === void 0 ? void 0 : payload.number)) {
@@ -377,7 +401,7 @@ function addLabels(labels) {
             owner: github.context.repo.owner,
             repo: github.context.repo.repo,
             issue_number: payload.number,
-            labels: labels
+            labels
         });
     });
 }
@@ -421,7 +445,7 @@ function addChecks(checks) {
                 client.repos.createCommitStatus({
                     owner: github.context.repo.owner,
                     repo: github.context.repo.repo,
-                    sha: sha,
+                    sha,
                     context: check.context,
                     state: check.state,
                     description: check.description,
@@ -431,7 +455,7 @@ function addChecks(checks) {
         ]);
     });
 }
-config_1.getConfig(client, configPath)
+config_1.getConfig(client, configPath, remoteConfigPath)
     .then((config) => __awaiter(void 0, void 0, void 0, function* () {
     const labeled = yield labeler_1.labels(client, config);
     const finalLabels = labeler_1.mergeLabels(labeled, config);

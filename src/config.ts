@@ -89,13 +89,27 @@ export function parse(content: string): Config {
 
 export async function getConfig(
   client: InstanceType<typeof GitHub>,
-  configPath: string
+  configPath?: string,
+  remoteConfigPath?: string
 ): Promise<Config> {
+  let owner = ''
+  let repo = ''
+  let path = ''
+  if (configPath) {
+    owner = github.context.repo.owner
+    repo = github.context.repo.repo
+    // ref = github.context.sha
+    path = configPath
+  } else if (remoteConfigPath) {
+    const remoteInfo: string[] = remoteConfigPath.split('/')
+    owner = remoteInfo[0]
+    repo = remoteInfo[1]
+    path = remoteInfo.slice(2).join('/')
+  }
   const response: any = await client.repos.getContent({
-    owner: github.context.repo.owner,
-    repo: github.context.repo.repo,
-    ref: github.context.sha,
-    path: configPath
+    owner,
+    repo,
+    path
   })
 
   const content: string = await Buffer.from(

@@ -5,12 +5,19 @@ import {Config, getConfig} from './config'
 import {checks, StatusCheck} from './checks'
 
 const githubToken = core.getInput('github-token')
-const configPath = core.getInput('config-path', {required: true})
+let configPath: string | undefined = core.getInput('config-path')
+let remoteConfigPath: string | undefined = core.getInput('remote-config-path')
+if (configPath === '' && remoteConfigPath === '') {
+  throw new Error('Valid config-path or remote-config-path are required')
+} else if (remoteConfigPath !== '') {
+  configPath = undefined
+} else {
+  remoteConfigPath = undefined
+}
 
 const client = github.getOctokit(githubToken)
 const payload =
   github.context.payload.pull_request || github.context.payload.issue
-
 if (!payload?.number) {
   throw new Error(
     'Could not get issue_number from pull_request or issue from context'
@@ -28,7 +35,7 @@ async function addLabels(labels: string[]): Promise<void> {
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
     issue_number: payload!.number,
-    labels: labels
+    labels
   })
 }
 
@@ -77,7 +84,7 @@ async function addChecks(checks: StatusCheck[]): Promise<void> {
       client.repos.createCommitStatus({
         owner: github.context.repo.owner,
         repo: github.context.repo.repo,
-        sha: sha,
+        sha,
         context: check.context,
         state: check.state,
         description: check.description,
@@ -87,7 +94,7 @@ async function addChecks(checks: StatusCheck[]): Promise<void> {
   ])
 }
 
-getConfig(client, configPath)
+getConfig(client, configPath, remoteConfigPath)
   .then(async config => {
     const labeled = await labels(client, config)
     const finalLabels = mergeLabels(labeled, config)
